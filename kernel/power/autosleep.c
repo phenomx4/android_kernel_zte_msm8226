@@ -23,11 +23,6 @@ static struct workqueue_struct *autosleep_wq;
 static DEFINE_MUTEX(autosleep_lock);
 static struct wakeup_source *autosleep_ws;
 
-#ifdef CONFIG_ICE40_IRDA
-extern int irda_suspend_screenoff(void);
-extern int ice40_resume_screenon(void);
-#endif
-
 static void try_to_suspend(struct work_struct *work)
 {
 	unsigned int initial_count, final_count;
@@ -90,24 +85,6 @@ void pm_autosleep_unlock(void)
 	mutex_unlock(&autosleep_lock);
 }
 
-#ifndef CONFIG_ZTE_PLATFORM_SUSPEND_MODULES_WHEN_SCREENOFF
-#define CONFIG_ZTE_PLATFORM_SUSPEND_MODULES_WHEN_SCREENOFF //LHX_PM_20131008_01 add to suspend modules such as TouchScreen when screen off,and resume it when LCD on.
-#endif
-#ifdef CONFIG_ZTE_PLATFORM_SUSPEND_MODULES_WHEN_SCREENOFF
-static bool screen_has_been_off = false;
-extern int (*touchscreen_suspend_pm)(void);
-extern int (*touchscreen_resume_pm)(void);
-#endif
-
-
-
-#ifndef CONFIG_ZTE_PLATFORM_LCD_ON_TIME
-#define CONFIG_ZTE_PLATFORM_LCD_ON_TIME
-#endif
-
-#ifdef CONFIG_ZTE_PLATFORM_LCD_ON_TIME
-extern void zte_update_lateresume_2_earlysuspend_time(bool resume_or_earlysuspend);	//LHX_PM_20110411_01 resume_or_earlysuspend? lateresume : earlysuspend
-#endif
 int pm_autosleep_set_state(suspend_state_t state)
 {
 
@@ -126,52 +103,9 @@ int pm_autosleep_set_state(suspend_state_t state)
 
 	if (state > PM_SUSPEND_ON) {
 		pm_wakep_autosleep_enabled(true);
-#ifdef CONFIG_ZTE_PLATFORM_LCD_ON_TIME
-		zte_update_lateresume_2_earlysuspend_time(false);//LHX_PM_20110411_01,update earlysuspend time
-#endif
-
-#ifdef CONFIG_ZTE_PLATFORM_SUSPEND_MODULES_WHEN_SCREENOFF
-		
-		screen_has_been_off = true;
-		if(touchscreen_suspend_pm)
-		{
-			pr_info("ZTE_PM: suspend TS \n");
-			touchscreen_suspend_pm();
-		}
-		else
-		{
-			pr_info("ZTE_PM: touchscreen_suspend_pm = NULL \n ");
-		}
-
-#ifdef CONFIG_ICE40_IRDA
-		irda_suspend_screenoff();
-#endif
-
-#endif
 		queue_up_suspend_work();
 	} else {
 		pm_wakep_autosleep_enabled(false);
-#ifdef CONFIG_ZTE_PLATFORM_LCD_ON_TIME
-		zte_update_lateresume_2_earlysuspend_time(true);//LHX_PM_20110411_01 update resume time
-#endif
-
-#ifdef CONFIG_ZTE_PLATFORM_SUSPEND_MODULES_WHEN_SCREENOFF
-
-#ifdef CONFIG_ICE40_IRDA
-			ice40_resume_screenon();
-#endif
-
-		if(touchscreen_resume_pm && screen_has_been_off)// ONLY resume TS after screen has been off
-		{
-			pr_info("ZTE_PM: resume TS \n");
-			touchscreen_resume_pm();
-		}
-		else
-		{
-			pr_info("ZTE_PM: touchscreen_resume_pm = NULL or screen_has_been_off ? %s\n ",screen_has_been_off?"YES already":"NOT YET");
-		}
-		screen_has_been_off = false;
-#endif
 	}
 
 	mutex_unlock(&autosleep_lock);

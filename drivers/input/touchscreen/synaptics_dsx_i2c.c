@@ -34,16 +34,18 @@
 #include <linux/proc_fs.h>
 #include <linux/fb.h>
 #include "touchscreen_fw.h"
-#include <linux/input/touchscreen_pm.h>
+//#include <linux/input/touchscreen_pm.h>
 #define DRIVER_NAME "syna-touchscreen"
 #define INPUT_PHYS_NAME "syna-touchscreen/input0"
 
 #include <linux/rtc.h>
+#include <linux/of_device.h>
+#include <linux/of_gpio.h>
 
 
-#ifdef KERNEL_ABOVE_2_6_38
+//#ifdef KERNEL_ABOVE_2_6_38
 #define TYPE_B_PROTOCOL
-#endif
+//#endif
 
 #define NO_0D_WHILE_2D
 /*
@@ -151,6 +153,9 @@ static int synaptics_rmi4_suspend(struct device *dev);
 static int synaptics_rmi4_resume(struct device *dev);
 
 #endif
+static int fb_notifier_callback(struct notifier_block *self,
+				unsigned long event, void *data);
+
 int synaptics_rmi4_suspend_pm(void);
 
 int synaptics_rmi4_resume_pm(void);
@@ -965,7 +970,7 @@ static int synaptics_rmi4_f11_abs_report(struct synaptics_rmi4_data *rmi4_data,
 				& MASK_2BIT;
 		if(finger_status){
 			if(!test_bit(finger, pre_fingers)){
-				add_log=1;//记录落下信息
+				add_log=1;//\BC\C7录\C2\E4\CF\C2\D0\C5息
 			}
 			__set_bit(finger, pre_fingers);
 		}
@@ -2525,7 +2530,7 @@ static void synaptics_get_configid(
 
 	return;
 }
-
+#if 0
 static int
 proc_log_read_val(char *page, char **start, off_t off, int count, int *eof,
 			  void *data)
@@ -2573,11 +2578,11 @@ proc_log_read_val(char *page, char **start, off_t off, int count, int *eof,
 	*start = page + off;
 	return ((count < len - off) ? count : len - off);
 }
+#endif
 
+ssize_t
+proc_read_val(struct file *file, char __user *page, size_t size, loff_t *ppos)
 
-static int
-proc_read_val(char *page, char **start, off_t off, int count, int *eof,
-			  void *data)
 {
 	int len = 0;
 	char chiptype[16], sensor[16];
@@ -2585,7 +2590,10 @@ proc_read_val(char *page, char **start, off_t off, int count, int *eof,
 	int ready_fw_ver=-1;
 	if ( syn_ts == NULL)
 		return -1;
-	
+    if (*ppos)      // ADB call again
+    {
+        return 0;
+    }	
 	len += sprintf(page + len, "Manufacturer : %s\n", "Synaptics");
 
 	synaptics_get_configid( syn_ts, (char *)&chiptype,(char *)&sensor, &fw_ver);
@@ -2608,21 +2616,18 @@ proc_read_val(char *page, char **start, off_t off, int count, int *eof,
 	{
 		len += sprintf(page + len, "no fw to update\n");
 	}
-	if (off + count >= len)
-		*eof = 1;
+	*ppos += len;
 
-	if (len < off)
-		return 0;
-
-	*start = page + off;
-	return ((count < len - off) ? count : len - off);
+	return len;
 }
 
-static int proc_write_val(struct file *file, const char *buffer,
-		   unsigned long count, void *data)
+ssize_t proc_write_val(struct file *file, const char  __user *buffer,
+		   size_t count, loff_t *off)
+
 {
-	unsigned long val;
-	sscanf(buffer, "%lu", &val);
+	unsigned long val,ret;
+	ret=copy_from_user(&val, buffer, 1);
+
 
 #if defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE)
 	syna_update_flag = 0;
@@ -2649,6 +2654,57 @@ static int proc_write_val(struct file *file, const char *buffer,
 
 	return -EINVAL;
 }
+static ssize_t
+ts_update_read_val(struct file *file, char __user *page, size_t size, loff_t *ppos)
+
+{
+	int len = 1;
+
+	printk("%s:---enter---\n",__func__);
+    if (*ppos)      // ADB call again
+    {
+        //printk("[HEAD]wr: %d", cmd_head.wr);
+        printk("[PARAM]size: %d, *ppos: %d", (int)size, (int)*ppos);
+        printk("[TOOL_READ]ADB call again, return it.");
+        return 0;
+    }
+	*ppos += len;
+#if defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE)
+		syna_update_flag = 0;
+		if(touch_moudle>=SYN_MOUDLE_NUM_MAX)
+		{
+			printk("touchscreen moudle unknow!");
+			syna_update_flag = 1;
+			return 1;
+		}
+		//disable_irq(syn_ts->i2c_client->irq);
+		if(fwu_start_reflash())
+		{
+			//enable_irq(syn_ts->i2c_client->irq);
+			syna_update_flag = 1;
+			pr_info("syna fw update fail! \n" );
+			return 1;
+		}
+		
+		//enable_irq(syn_ts->i2c_client->irq);
+		
+		syna_update_flag = 2;
+		pr_info("syna fw update Ok! \n" );
+#endif
+
+	return len;
+}
+
+static const struct file_operations update_proc_ops = {
+    .owner = THIS_MODULE,
+    .read = ts_update_read_val,
+};
+
+static const struct file_operations proc_ops = {
+    .owner = THIS_MODULE,
+    .read = proc_read_val,
+    .write = proc_write_val,
+};
 
 void zte_synaptics_change_fw_config( struct synaptics_rmi4_data *ts )//xym
 {
@@ -3061,8 +3117,8 @@ static int  synaptics_rmi4_probe(struct i2c_client *client,
 	rmi4_data->early_suspend.resume = synaptics_rmi4_late_resume;
 	register_early_suspend(&rmi4_data->early_suspend);
 #endif
-	touchscreen_suspend_pm=synaptics_rmi4_suspend_pm;
-	touchscreen_resume_pm=synaptics_rmi4_resume_pm;
+	//touchscreen_suspend_pm=synaptics_rmi4_suspend_pm;
+	//touchscreen_resume_pm=synaptics_rmi4_resume_pm;
 
 	if (!exp_data.initialized) {
 		mutex_init(&exp_data.mutex);
@@ -3124,6 +3180,26 @@ static int  synaptics_rmi4_probe(struct i2c_client *client,
 	#if defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_DEV)
 	rmidev_module_init();
 	#endif
+	
+	rmi4_data->fb_notif.notifier_call = fb_notifier_callback;
+	retval = fb_register_client(&rmi4_data->fb_notif);
+	if (retval)
+		dev_err(&rmi4_data->i2c_client->dev,
+			"Unable to register fb_notifier: %d\n",
+			retval);
+	
+	dir = proc_mkdir("touchscreen", NULL);
+	  //refresh = create_proc_entry("ts_information", 0664, dir);
+	  refresh=proc_create("ts_information", 0664, dir, &proc_ops);
+	  if (refresh==NULL) {
+		printk("proc_create ts_information failed!\n");
+	  }
+	  refresh=proc_create("ts_update", 0444, dir, &update_proc_ops);
+	  if (refresh==NULL) {
+		printk("proc_create ts_information failed!\n");
+	  }
+
+	#if 0
 	dir = proc_mkdir("touchscreen", NULL);
 	  refresh = create_proc_entry("ts_information", 0664, dir);
 	  if (refresh) {
@@ -3138,7 +3214,7 @@ static int  synaptics_rmi4_probe(struct i2c_client *client,
 		  refresh->read_proc  = proc_log_read_val;
 		  refresh->write_proc = NULL;
 	  }
-
+	#endif
 	return retval;
 
 err_sysfs:
@@ -3449,6 +3525,26 @@ static int synaptics_rmi4_resume(struct device *dev)
 	return 0;
 }
 #endif
+static int fb_notifier_callback(struct notifier_block *self,
+				 unsigned long event, void *data)
+{
+	struct fb_event *evdata = data;
+	int *blank;
+	struct synaptics_rmi4_data *ts =
+		container_of(self, struct synaptics_rmi4_data, fb_notif);
+
+	if (evdata && evdata->data && event == FB_EVENT_BLANK &&
+			ts && ts->i2c_client) {
+		blank = evdata->data;
+		if (*blank == FB_BLANK_UNBLANK)
+			synaptics_rmi4_resume_pm();
+		else if ((*blank == FB_BLANK_POWERDOWN)||(*blank == FB_BLANK_NORMAL))
+			synaptics_rmi4_suspend_pm();
+	}
+
+	return 0;
+}
+
 int synaptics_rmi4_suspend_pm(void)
 {
 
@@ -3469,11 +3565,12 @@ int synaptics_rmi4_resume_pm(void)
 {
 
  printk("synaptics_rmi4_resume_pm\n");  
- synaptics_rmi4_sensor_wake(syn_ts);
- zte_synaptics_change_fw_config(syn_ts);//xym 
- syn_ts->touch_stopped = false;
- synaptics_rmi4_irq_enable(syn_ts, true);
- 
+ if(syn_ts->sensor_sleep){
+    synaptics_rmi4_sensor_wake(syn_ts);
+    zte_synaptics_change_fw_config(syn_ts);//xym 
+    syn_ts->touch_stopped = false;
+    synaptics_rmi4_irq_enable(syn_ts, true);
+ }
 #if 1
 	 timespec= current_kernel_time();
 	 rtc_time_to_tm(timespec.tv_sec, &time);

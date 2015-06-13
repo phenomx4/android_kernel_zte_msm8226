@@ -204,6 +204,7 @@ struct rmi_config_id {
  */
 struct synaptics_rmi4_data {
 	struct i2c_client *i2c_client;
+	struct notifier_block fb_notif;
 	struct input_dev *input_dev;
 	const struct synaptics_dsx_platform_data *board;
 	struct synaptics_rmi4_device_info rmi4_mod_info;
@@ -212,6 +213,7 @@ struct synaptics_rmi4_data {
 	#ifdef CONFIG_HAS_EARLYSUSPEND
 	struct early_suspend early_suspend;
 	#endif
+	struct mutex ops_lock;
 	unsigned char current_page;
 	unsigned char button_0d_enabled;
 	unsigned char full_pm_cycle;
