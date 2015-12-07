@@ -194,6 +194,15 @@ int msm_vidc_g_ctrl(void *instance, struct v4l2_control *control)
 		return msm_venc_g_ctrl(instance, control);
 	return -EINVAL;
 }
+int msm_vidc_s_ext_ctrl(void *instance, struct v4l2_ext_controls *control)
+{
+	struct msm_vidc_inst *inst = instance;
+	if (!inst || !control)
+		return -EINVAL;
+	if (inst->session_type == MSM_VIDC_ENCODER)
+		return msm_venc_s_ext_ctrl(instance, control);
+	return -EINVAL;
+}
 int msm_vidc_reqbufs(void *instance, struct v4l2_requestbuffers *b)
 {
 	struct msm_vidc_inst *inst = instance;
@@ -1371,13 +1380,13 @@ int msm_vidc_close(void *instance)
 	}
 
 	core = inst->core;
-	mutex_lock(&core->sync_lock);
+	mutex_lock(&core->lock);
 	list_for_each_safe(ptr, next, &core->instances) {
 		temp = list_entry(ptr, struct msm_vidc_inst, list);
 		if (temp == inst)
 			list_del(&inst->list);
 	}
-	mutex_unlock(&core->sync_lock);
+	mutex_unlock(&core->lock);
 
 	if (inst->session_type == MSM_VIDC_DECODER)
 		msm_vdec_ctrl_deinit(inst);
@@ -1402,4 +1411,9 @@ int msm_vidc_close(void *instance)
 	kfree(inst);
 
 	return 0;
+}
+
+int msm_vidc_suspend(int core_id)
+{
+	return msm_comm_suspend(core_id);
 }
