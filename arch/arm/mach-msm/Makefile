@@ -421,6 +421,6 @@ obj-$(CONFIG_PERFMAP) += perfmap.o
 
 obj-$(CONFIG_ARCH_MSM8974) += cpubw-krait.o
 
-obj-y += zte_misc.o
+obj-y += zte_misc.o board-zte-wifi.o
 
 

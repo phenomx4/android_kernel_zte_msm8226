@@ -1864,6 +1864,9 @@ struct cfg80211_ops {
  *	responds to probe-requests in hardware.
  * @WIPHY_FLAG_OFFCHAN_TX: Device supports direct off-channel TX.
  * @WIPHY_FLAG_HAS_REMAIN_ON_CHANNEL: Device supports remain-on-channel call.
+ * @WIPHY_FLAG_DISABLE_11D_HINT_FROM_CORE: enable this flag if the driver
+ *	does not want the channel flags to be changed by the country IE of the
+ *	connected BSS due to a regulatory hint from the core
  */
 enum wiphy_flags {
 	WIPHY_FLAG_CUSTOM_REGULATORY		= BIT(0),
@@ -1887,6 +1890,7 @@ enum wiphy_flags {
 	WIPHY_FLAG_AP_PROBE_RESP_OFFLOAD	= BIT(19),
 	WIPHY_FLAG_OFFCHAN_TX			= BIT(20),
 	WIPHY_FLAG_HAS_REMAIN_ON_CHANNEL	= BIT(21),
+	WIPHY_FLAG_DISABLE_11D_HINT_FROM_CORE	= BIT(22),
 };
 
 /**
@@ -2645,6 +2649,15 @@ unsigned int ieee80211_get_hdrlen_from_skb(const struct sk_buff *skb);
  * @fc: frame control field in little-endian format
  */
 unsigned int __attribute_const__ ieee80211_hdrlen(__le16 fc);
+
+/**
+ * ieee80211_get_mesh_hdrlen - get mesh extension header length
+ * @meshhdr: the mesh extension header, only the flags field
+ *	(first byte) will be accessed
+ * Returns the length of the extension header, which is always at
+ * least 6 bytes and at most 18 if address 5 and 6 are present.
+ */
+unsigned int ieee80211_get_mesh_hdrlen(struct ieee80211s_hdr *meshhdr);
 
 /**
  * DOC: Data path helpers
