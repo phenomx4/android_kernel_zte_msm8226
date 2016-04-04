@@ -38,8 +38,6 @@ struct task_security_struct {
 
 struct inode_security_struct {
 	struct inode *inode;	/* back pointer to inode object */
-	//struct list_head list;	/* list of inode_security_struct */
-	// for kernel bug by yxl 1008   possible NULL pointer dereference in selinux_inode_permission
 	union {
 		struct list_head list;	/* list of inode_security_struct */
 		struct rcu_head rcu;	/* for freeing the inode_security_struct */
