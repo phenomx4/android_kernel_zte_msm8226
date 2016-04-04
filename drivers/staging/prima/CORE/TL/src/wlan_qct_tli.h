@@ -254,6 +254,7 @@ when        who    what, where, why
   ((WLANTL_BT_AMP_TYPE_AR == usType) || (WLANTL_BT_AMP_TYPE_SEC == usType) || \
    (WLANTL_BT_AMP_TYPE_LS_REQ == usType) || (WLANTL_BT_AMP_TYPE_LS_REP == usType))
 
+#define WLANTL_CACHE_TRACE_WATERMARK 100
 /*---------------------------------------------------------------------------
   TL signals for TX thread
 ---------------------------------------------------------------------------*/
@@ -266,7 +267,8 @@ typedef enum
    and TL is low on resources*/
   WLANTL_TX_RES_NEEDED  = 1,
 
-  /* Forwarding RX cached frames */
+  /* Forwarding RX cached frames. This is not used anymore as it is
+     replaced by WLANTL_RX_FWD_CACHED in RX thread*/
   WLANTL_TX_FWD_CACHED  = 2,
 
   /* Serialized STAID AC Indication */
@@ -283,6 +285,18 @@ typedef enum
 
   WLANTL_TX_MAX
 }WLANTL_TxSignalsType;
+
+
+/*---------------------------------------------------------------------------
+  TL signals for RX thread
+---------------------------------------------------------------------------*/
+typedef enum
+{
+
+  /* Forwarding RX cached frames */
+  WLANTL_RX_FWD_CACHED  = 0,
+
+}WLANTL_RxSignalsType;
 
 /*---------------------------------------------------------------------------
   STA Event type
@@ -318,7 +332,8 @@ typedef enum
 ---------------------------------------------------------------------------*/
 typedef VOS_STATUS (*WLANTL_STAFuncType)( v_PVOID_t     pAdapter,
                                           v_U8_t        ucSTAId,
-                                          vos_pkt_t**   pvosDataBuff);
+                                          vos_pkt_t**   pvosDataBuff,
+                                          v_BOOL_t      bForwardIAPPwithLLC);
 
 /*---------------------------------------------------------------------------
   STA FSM Entry type
@@ -331,32 +346,38 @@ typedef struct
 /* Receive in connected state - only EAPOL or WAI*/
 VOS_STATUS WLANTL_STARxConn( v_PVOID_t     pAdapter,
                              v_U8_t        ucSTAId,
-                             vos_pkt_t**   pvosDataBuff );
+                             vos_pkt_t**   pvosDataBuff,
+                             v_BOOL_t      bForwardIAPPwithLLC);
 
 /* Transmit in connected state - only EAPOL or WAI*/
 VOS_STATUS WLANTL_STATxConn( v_PVOID_t     pAdapter,
                              v_U8_t        ucSTAId,
-                             vos_pkt_t**   pvosDataBuff );
+                             vos_pkt_t**   pvosDataBuff,
+                             v_BOOL_t      bForwardIAPPwithLLC);
 
 /* Receive in authenticated state - all data allowed*/
 VOS_STATUS WLANTL_STARxAuth( v_PVOID_t     pAdapter,
                              v_U8_t        ucSTAId,
-                             vos_pkt_t**   pvosDataBuff );
+                             vos_pkt_t**   pvosDataBuff,
+                             v_BOOL_t      bForwardIAPPwithLLC);
 
 /* Transmit in authenticated state - all data allowed*/
 VOS_STATUS WLANTL_STATxAuth( v_PVOID_t     pAdapter,
                              v_U8_t        ucSTAId,
-                             vos_pkt_t**   pvosDataBuff );
+                             vos_pkt_t**   pvosDataBuff,
+                             v_BOOL_t      bForwardIAPPwithLLC);
 
 /* Receive in disconnected state - no data allowed*/
 VOS_STATUS WLANTL_STARxDisc( v_PVOID_t     pAdapter,
                              v_U8_t        ucSTAId,
-                             vos_pkt_t**   pvosDataBuff );
+                             vos_pkt_t**   pvosDataBuff,
+                             v_BOOL_t      bForwardIAPPwithLLC);
 
 /* Transmit in disconnected state - no data allowed*/
 VOS_STATUS WLANTL_STATxDisc( v_PVOID_t     pAdapter,
                              v_U8_t        ucSTAId,
-                             vos_pkt_t**   pvosDataBuff );
+                             vos_pkt_t**   pvosDataBuff,
+                             v_BOOL_t      bForwardIAPPwithLLC);
 
 /* TL State Machine */
 STATIC const WLANTL_STAFsmEntryType tlSTAFsm[WLANTL_STA_MAX_STATE] =
@@ -455,6 +476,8 @@ typedef struct
   WLANTL_TIMER_EXPIER_UDATA_T timerUdata;
 
   WLANTL_REORDER_BUFFER_T     *reorderBuffer;
+
+  v_U16_t            LastSN;
 }WLANTL_BAReorderType;
 
 
@@ -466,6 +489,17 @@ typedef struct
   /* flag set when a UAPSD session with triggers generated in fw is being set*/
   v_U8_t              ucSet;
 }WLANTL_UAPSDInfoType;
+
+/*---------------------------------------------------------------------------
+  per-STA cache info
+---------------------------------------------------------------------------*/
+typedef struct
+{
+  v_U16_t               cacheSize;
+  v_TIME_t              cacheInitTime;
+  v_TIME_t              cacheDoneTime;
+  v_TIME_t              cacheClearTime;
+}WLANTL_CacheInfoType;
 
 /*---------------------------------------------------------------------------
   STA Client type
@@ -588,7 +622,7 @@ typedef struct
   /*Begining of the cached packets chain*/
   vos_pkt_t*                 vosEndCachedFrame;
 
-
+  WLANTL_CacheInfoType       tlCacheInfo;
   /* LWM related fields */
 
   //current station is slow. LWM mode is enabled.
@@ -1341,7 +1375,8 @@ WLANTL_Translate80211To8023Header
   v_U16_t         usActualHLen,
   v_U8_t          ucHeaderLen,
   WLANTL_CbType*  pTLCb,
-  v_U8_t          ucSTAId
+  v_U8_t          ucSTAId,
+  v_BOOL_t	  bForwardIAPPwithLLC
 );
 
 /*==========================================================================
