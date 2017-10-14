@@ -243,7 +243,9 @@ static void get_speed_bin(struct platform_device *pdev, int *bin, int *version)
 	if (redundant_sel == 1)
 		*bin = (pte_efuse >> 27) & 0x7;
 
-#if 0
+#ifdef CONFIG_MSM_CORTEX_A7_OVERCLOCK
+    *bin = 1;
+#else
 	if (!valid) {
 		dev_info(&pdev->dev, "Speed bin not set. Defaulting to 0!\n");
 		*bin = 0;
@@ -252,7 +254,6 @@ static void get_speed_bin(struct platform_device *pdev, int *bin, int *version)
 	}
 #endif
 
-    *bin = 1;
 	dev_info(&pdev->dev, "Speed bin: %d\n", *bin);
 
 	dev_info(&pdev->dev, "PVS version: %d\n", *version);

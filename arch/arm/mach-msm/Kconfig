@@ -595,6 +595,9 @@ config  ARCH_MSM_KRAIT
 config  MSM_CORTEX_A7
 	bool
 
+config  MSM_CORTEX_A7_OVERCLOCK
+	bool "Enable overclocking to 1.6Ghz"
+
 config  MSM_SMP
 	select HAVE_SMP
 	bool
